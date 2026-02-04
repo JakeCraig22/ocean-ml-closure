@@ -1,0 +1,12 @@
+data/raw/*
+data/generated/*
+!data/raw/.gitkeep
+!data/generated/.gitkeep
+
+.julia/
+*.jl.cov
+*.jl.mem
+
+.vscode/
+.DS_Store
+Thumbs.db

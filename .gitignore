@@ -3,6 +3,12 @@ data/generated/*
 !data/raw/.gitkeep
 !data/generated/.gitkeep
 
+output/
+data/generated/
+*.jld2
+*.png
+*.gif
+
 .julia/
 *.jl.cov
 *.jl.mem

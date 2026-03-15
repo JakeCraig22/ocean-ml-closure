@@ -4,18 +4,18 @@ using Random
 using LinearAlgebra
 using Printf
 
-data_path = "data/generated/dataset_many.jld2"
+data_path = "data/generated/dataset_multicase_trainonly.jld2"
+out_path = "data/generated/poly2_multicase_trainonly_model.jld2"
 
 @info "Loading dataset" data_path
 d = JLD2.load(data_path)
 
-X_all = d["X_all"]   # (N, Nz, 3)
+X_all = d["X_all"]   # (N, Nz, 4)
 y_all = d["y_all"]   # (N, Nz)
 
 N, Nz, F = size(X_all)
-@assert F == 5
+@assert F == 4
 
-# Train/test split by example
 rng = MersenneTwister(42)
 idx = collect(1:N)
 shuffle!(rng, idx)
@@ -44,7 +44,6 @@ end
 Xtr, ytr = flatten_points(X_all, y_all, train_idx)
 Xte, yte = flatten_points(X_all, y_all, test_idx)
 
-# Standardize base features
 μ = vec(mean(Xtr, dims=1))
 σ = vec(std(Xtr, dims=1))
 σ .= ifelse.(σ .== 0.0, 1.0, σ)
@@ -52,25 +51,17 @@ Xte, yte = flatten_points(X_all, y_all, test_idx)
 Xtrn = (Xtr .- μ') ./ σ'
 Xten = (Xte .- μ') ./ σ'
 
-# Build polynomial (degree-2) features from standardized base inputs
 function poly2_features(X::Array{Float64,2})
-    # X is (M, F)
     M, F = size(X)
-
     cols = Vector{Vector{Float64}}()
     sizehint!(cols, F + F + (F*(F-1))÷2)
 
-    # linear terms
     for i in 1:F
         push!(cols, X[:, i])
     end
-
-    # squared terms
     for i in 1:F
         push!(cols, X[:, i].^2)
     end
-
-    # pairwise interaction terms
     for i in 1:F
         for j in (i+1):F
             push!(cols, X[:, i] .* X[:, j])
@@ -83,7 +74,6 @@ end
 Φtr = poly2_features(Xtrn)
 Φte = poly2_features(Xten)
 
-# Add bias
 Φtrb = hcat(ones(size(Φtr, 1)), Φtr)
 Φteb = hcat(ones(size(Φte, 1)), Φte)
 
@@ -97,7 +87,7 @@ rmse(a, b) = sqrt(mean((a .- b).^2))
 train_rmse = rmse(ŷtr, ytr)
 test_rmse  = rmse(ŷte, yte)
 
-@printf("\nPoly2 baseline results:\n")
+@printf("\nPoly2 multicase results:\n")
 @printf("  Train RMSE: %.6e\n", train_rmse)
 @printf("  Test  RMSE: %.6e\n", test_rmse)
 
@@ -108,9 +98,6 @@ zero_test_rmse  = rmse(zeros(length(yte)), yte)
 @printf("  Train RMSE: %.6e\n", zero_train_rmse)
 @printf("  Test  RMSE: %.6e\n", zero_test_rmse)
 
-@printf("\nLinear baseline reference (from last run):\n")
-@printf("  Test RMSE ≈ 6.002454e-06\n")
-
-out_path = "data/generated/poly2_baseline_model.jld2"
+out_path = "data/generated/poly2_multicase_model.jld2"
 JLD2.@save out_path β μ σ
-@info "Saved poly2 model" out_path
+@info "Saved poly2 multicase model" out_path

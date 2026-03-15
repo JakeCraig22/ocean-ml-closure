@@ -1,7 +1,7 @@
 # src/analysis/build_dataset_many.jl
 #
 # Build a training dataset from MANY snapshots.
-# inputs:  u(z), dudz(z), dTdz(z) from coarse
+# inputs:  u(z), w(z), dudz(z), dTdz(z), z/H from coarse
 # target:  residual_T(z) = T_truth_filtered(z) - T_coarse(z)
 #
 # Saves: data/generated/dataset_many.jld2
@@ -24,6 +24,11 @@ max_examples = nothing
 
 
 # Helpers
+
+# Convert a face-centered vertical profile (length Nz+1) to cell centers (length Nz)
+function face_to_center_profile(w_face::AbstractVector)
+    return 0.5 .* (w_face[1:end-1] .+ w_face[2:end])
+end
 
 function horiz_mean_profile(A::AbstractArray{T,3}) where {T}
     Nz = size(A, 3)
@@ -76,7 +81,7 @@ end
 # Preallocate storage (after first example to learn Nz)
 H = 100.0  
 
-X_list = Vector{Array{Float64,2}}()  # each is Nz x 3
+X_list = Vector{Array{Float64,2}}()  # each is Nz x 5
 y_list = Vector{Vector{Float64}}()  # each is Nz
 t_list = Float64[]
 name_list = String[]
@@ -96,14 +101,25 @@ for (idx, coarse_path) in enumerate(snap_paths)
     truth  = JLD2.load(truth_path)
 
     u_c = coarse["u"]
+    w_c = coarse["w"]   
     T_c = coarse["T"]
     T_t = truth["T"]
 
     u_prof = horiz_mean_profile(u_c)
     T_prof = horiz_mean_profile(T_c)
 
-    Nz = length(u_prof)
+    Nz = length(u_prof)  # cell-center Nz
+
+    w_prof = horiz_mean_profile(w_c)
+    
+    if length(w_prof) == Nz + 1
+        w_prof = face_to_center_profile(w_prof)
+    elseif length(w_prof) != Nz
+        error("Unexpected w_prof length=$(length(w_prof)); expected Nz=$(Nz) or Nz+1=$(Nz+1)")
+    end
+
     z = collect(range(-H, 0.0, length=Nz))
+    z_norm = z ./ H
 
     dudz = central_diff_1d(u_prof, z)
     dTdz = central_diff_1d(T_prof, z)
@@ -113,7 +129,7 @@ for (idx, coarse_path) in enumerate(snap_paths)
 
     residual_T = T_truth_filt .- T_prof
 
-    X = hcat(u_prof, dudz, dTdz)  # Nz x 3
+    X = hcat(u_prof, w_prof, dudz, dTdz, z_norm)  # Nz x 5
 
     push!(X_list, X)
     push!(y_list, residual_T)
@@ -133,7 +149,7 @@ end
 Nz = size(X_list[1], 1)
 
 # Stack into arrays: X (N, Nz, 3), y (N, Nz)
-X_all = Array{Float64,3}(undef, N, Nz, 3)
+X_all = Array{Float64,3}(undef, N, Nz, 5)
 y_all = Array{Float64,2}(undef, N, Nz)
 
 for i in 1:N

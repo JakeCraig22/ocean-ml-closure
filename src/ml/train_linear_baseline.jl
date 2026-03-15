@@ -17,7 +17,7 @@ X_all = d["X_all"]   # (N, Nz, 3)
 y_all = d["y_all"]   # (N, Nz)
 
 N, Nz, F = size(X_all)
-@assert F == 3
+@assert F == 5
 
 @info "Shapes" N Nz F
 

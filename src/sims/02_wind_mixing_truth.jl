@@ -1,40 +1,25 @@
 using Oceananigans
+using Oceananigans: TimeInterval, IterationInterval
 using Printf
-using Dates
 using JLD2
 using Oceananigans.TurbulenceClosures: ScalarDiffusivity
 
-# Numbers that control how big the ocean is
-# how detailed is it vertically and how long
-# the sim runs
+water_depth = 100.0
+vert_res = 256
+delt_t = 1.0
+stop_time = 24 * 60 * 60
 
-water_depth = 100.0 #depth of water in meters
-vert_res = 256 #vertical resolution (num vert layers the water is split into)
-delt_t = 1.0 #time step in seconds (starting time step -> seconds per step )
-stop_time = 6 * 60 * 60 #total time for simulation in seconds (6 hours)
-
-#model divides the water into rectangular boxes
-# - 1 box in the east west dir
-# - 1 box in the north south dir
-# - vert_res boxes in the vertical dir
-# representation of one vertical column of the ocean
 grid = RectilinearGrid(
-    size = (8, 8, vert_res), #num boxes in x,y,z
-    extent = (1, 1, water_depth), #size of the box
+    size = (8, 8, vert_res),
+    extent = (1, 1, water_depth),
     topology = (Periodic, Periodic, Bounded)
-    # period -> the sides loop around horizontally
-    # bounded -> water has a top and bottom
 )
 
+# Stronger wind stress
+tx = 2e-3
 
-# Wind pushes on the ocean Surface
-# trasfering momentum into the water
-# causing mixing
-
-tx = 5e-4 # N/m^2 (strength of wind stress)
-
-ρ0 = 1027.0                 # reference density (kg/m^3)
-τx = tx / ρ0                # kinematic stress (m^2/s^2)
+ρ0 = 1027.0
+τx = tx / ρ0
 
 u_bcs = FieldBoundaryConditions(
     top = FluxBoundaryCondition(τx),
@@ -46,53 +31,31 @@ v_bcs = FieldBoundaryConditions(
     bottom = FluxBoundaryCondition(0.0)
 )
 
-#------------
-#model
-#------------
-# A fluid model that allows vertical motion
-# and turbulence. Temp directly affects density,
-# controlling buyoancy and mixing
-model = NonhydrostaticModel(
-    grid,
-    buoyancy = SeawaterBuoyancy(), #Temp controls density
-    tracers = (:T, :S), #T to represent temp, S to reperesent Salinity
-    closure = (AnisotropicMinimumDissipation(), ScalarDiffusivity(ν=1e-4, κ=1e-5)),
-    boundary_conditions = (u = u_bcs, v = v_bcs)
-    #used to approximate the small turbulent motions the grid can't see
-)
+κ_tracers = (T = 1e-5, S = 1e-5)
 
-#------------
-#initial conditions
-#------------
+model = NonhydrostaticModel(
+    grid;
+    buoyancy = SeawaterBuoyancy(),
+    tracers = (:T, :S),
+    closure = (AnisotropicMinimumDissipation(),
+               ScalarDiffusivity(ν = 1e-4, κ = κ_tracers)),
+    boundary_conditions = (u = u_bcs, v = v_bcs)
+)
 
 set!(model,
     T = (x, y, z) -> -z / water_depth,
     S = (x, y, z) -> 35.0
-     # Temp decreases with depth
 )
 
-#------------
-#Diagnose
-#------------
-#automatically adjust such that the simulation
-#remains stable
-
-wizard = TimeStepWizard(cfl=0.8, max_Δt=10.0)
-# safety factor, and max step allowed
+wizard = TimeStepWizard(cfl = 0.8, max_Δt = 10.0)
 
 simulation = Simulation(
     model,
-    Δt = delt_t, #initial time step
+    Δt = delt_t,
     stop_time = stop_time,
 )
 
-#------------
-#run
-#------------
-
-using Oceananigans: TimeInterval
-
-const outdir = "output/truth_surface_stress_tx5e-4_6hr_Nz256"
+const outdir = "output/truth_surface_stress_tx2e-3_24hr_Nz256"
 isdir(outdir) || mkpath(outdir)
 
 function save_snapshot(sim)
@@ -106,21 +69,16 @@ function save_snapshot(sim)
 
     filename = joinpath(outdir, @sprintf("snap_%06d.jld2", i))
     @save filename i t u w T S
-    @info "Saved snapshot" filename=filename iter=i time=t
+    @info "Saved snapshot" filename = filename iter = i time = t
     return nothing
 end
 
 heartbeat(sim) = @info "iter=$(iteration(sim)) time=$(time(sim)) Δt=$(sim.Δt)"
 
-#attach the TimeStepWizard to the simulation (it updates delta_t every iteration)
 add_callback!(simulation, wizard, IterationInterval(1))
-
-#progress logs
-add_callback!(simulation, heartbeat, TimeInterval(5))
-
-#save every 5 minutes of model time
+add_callback!(simulation, heartbeat, TimeInterval(60))
 add_callback!(simulation, save_snapshot, TimeInterval(300))
 
-@info "Running wind-driven mixing TRUTH sim (Nz=256)"
+@info "Running truth wind-driven mixing sim" tx = tx outdir = outdir
 run!(simulation)
-@info "sim complete"
+@info "Simulation complete"

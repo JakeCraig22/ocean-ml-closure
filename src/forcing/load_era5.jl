@@ -18,25 +18,33 @@ end
 function load_era5_point(path::String)
     ds = NCDataset(path)
 
-    vars = keys(ds.vars)
-    @assert "u10" in vars "Missing u10"
-    @assert "v10" in vars "Missing v10"
-    @assert "t2m" in vars "Missing t2m"
-    @assert "sst" in vars "Missing sst"
+    names = keys(ds)
 
-    time_name = "valid_time" in vars ? "valid_time" : ("time" in vars ? "time" : error("No valid_time/time variable found"))
+    @assert "u10" in names "Missing u10"
+    @assert "v10" in names "Missing v10"
+    @assert "t2m" in names "Missing t2m"
+    @assert "sst" in names "Missing sst"
+
+    time_name = "valid_time" in names ? "valid_time" :
+                ("time" in names ? "time" : error("No valid_time/time variable found"))
 
     raw_time = vec(ds[time_name][:])
-    t0 = Float64(raw_time[1])
-    time_sec = Float64.(raw_time .- t0) .* 3600.0
 
-    u10 = Float64.(vec(ds["u10"][:]))
-    v10 = Float64.(vec(ds["v10"][:]))
-    t2m = Float64.(vec(ds["t2m"][:]))
-    sst = Float64.(vec(ds["sst"][:]))
+    if raw_time[1] isa DateTime
+        t0 = raw_time[1]
+        time_sec = Float64.(Dates.value.(raw_time .- t0)) ./ 1000.0
+    else
+        t0 = Float64(raw_time[1])
+        time_sec = Float64.(raw_time .- t0)
+    end
 
-    ssrd = "ssrd" in vars ? Float64.(vec(ds["ssrd"][:])) : zeros(length(time_sec))
-    strd = "strd" in vars ? Float64.(vec(ds["strd"][:])) : zeros(length(time_sec))
+    u10 = Float64.(coalesce.(vec(ds["u10"][:]), NaN))
+    v10 = Float64.(coalesce.(vec(ds["v10"][:]), NaN))
+    t2m = Float64.(coalesce.(vec(ds["t2m"][:]), NaN))
+    sst = Float64.(coalesce.(vec(ds["sst"][:]), NaN))
+
+    ssrd = "ssrd" in names ? Float64.(coalesce.(vec(ds["ssrd"][:]), NaN)) : zeros(length(time_sec))
+    strd = "strd" in names ? Float64.(coalesce.(vec(ds["strd"][:]), NaN)) : zeros(length(time_sec))
 
     close(ds)
 

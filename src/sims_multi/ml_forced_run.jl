@@ -92,7 +92,7 @@ for i in 1:Nt
 
     τx[i] = forcing_scale_x * y[1]
     τy[i] = forcing_scale_y * y[2]
-    QT[i] = -forcing_scale_QT * y[3]   # <-- flip sign here later if needed
+    QT[i] = -forcing_scale_QT * y[3]   
 end
 
 println("τx stats: min=", minimum(τx), " max=", maximum(τx))

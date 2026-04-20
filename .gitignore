@@ -1,0 +1,38 @@
+# raw data is too big for git, grab from era5/copernicus
+data/raw/*
+data/NewEra5/
+data/Copernicus_*/
+data/ERA5/
+*.nc
+
+# keep empty marker dirs
+!data/raw/.gitkeep
+!data/generated/.gitkeep
+
+# sim outputs + plots get regenerated
+output/
+*.jld2
+*.png
+*.gif
+
+!figures/
+!figures/**
+
+# julia junk
+.julia/
+*.jl.cov
+*.jl.mem
+
+# jupyter autosaves
+.ipynb_checkpoints/
+
+# my own notes, not for the repo
+memory/
+.claude/
+.claude-plans/
+CLAUDE.md
+
+# editor/os
+.vscode/
+.DS_Store
+Thumbs.db
